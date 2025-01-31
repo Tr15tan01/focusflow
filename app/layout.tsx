@@ -28,15 +28,15 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
-        <body>
+        <body className="flex flex-col h-screen items-center">
           <ThemeProvider
             attribute="class"
             enableSystem={true}
             defaultTheme="light"
             disableTransitionOnChange
           >
-            <div className="flex min-h-screen w-full flex-col items-center dark:bg-black">
-              <NavBar />
+            <NavBar />
+            <div className="flex flex-col max-w-7xl  mx-auto h-screen items-center justify-center p-4 px-8 bg-red-600 dark:bg-black">
               <Separator />
               {/* <main className="flex flex-grow w-full justify-center dark:bg-neutral-950"> */}
               {children}

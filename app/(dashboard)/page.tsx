@@ -1,4 +1,5 @@
 import { AlertDemo } from "@/components/alert";
+import CreateCollectionButton from "@/components/createcollectionbutton";
 import { SkeletonCard } from "@/components/skeleton";
 import { prisma } from "@/lib/prisma";
 import { wait } from "@/lib/wait";
@@ -15,14 +16,14 @@ import { Suspense } from "react";
 
 export default async function Home() {
   return (
-    <>
+    <div>
       <Suspense fallback={<WelcomeMessageFallback />}>
         <WelcomeMessage />
       </Suspense>
       <Suspense fallback={<WelcomeMessageFallback />}>
         <CollectionList />
       </Suspense>
-    </>
+    </div>
   );
 }
 
@@ -33,7 +34,7 @@ const WelcomeMessage = async () => {
   if (!user) return <div>Not Silgned In!!!</div>;
 
   return (
-    <div className="flex flex-col w-full items-center page-transition">
+    <div className="flex flex-col w-full items-center page-transition bg-blue-500 p-6">
       <h2 className="text-5xl font-bold">welcome, {user?.firstName} </h2>
       <SignedOut>
         <SignInButton />
@@ -58,6 +59,11 @@ async function CollectionList() {
     },
   });
   if (collections.length === 0) {
-    return <AlertDemo />;
+    return (
+      <>
+        <AlertDemo />
+        <CreateCollectionButton />
+      </>
+    );
   }
 }
