@@ -12,6 +12,8 @@ import NavBar from "@/components/navbar";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Separator } from "@radix-ui/react-separator";
 import { useEffect, useState } from "react";
+import { Toaster } from "@/components/ui/toaster";
+
 export default function RootLayout({
   children,
 }: {
@@ -42,6 +44,7 @@ export default function RootLayout({
               {children}
               {/* </main> */}
             </div>
+            <Toaster />
           </ThemeProvider>
         </body>
       </html>

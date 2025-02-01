@@ -1,4 +1,5 @@
 import { AlertDemo } from "@/components/alert";
+import Collectioncard from "@/components/collectioncard";
 import CreateCollectionButton from "@/components/createcollectionbutton";
 import { SkeletonCard } from "@/components/skeleton";
 import { prisma } from "@/lib/prisma";
@@ -58,6 +59,7 @@ async function CollectionList() {
       userId: user?.id,
     },
   });
+
   if (collections.length === 0) {
     return (
       <>
@@ -66,4 +68,16 @@ async function CollectionList() {
       </>
     );
   }
+
+  return (
+    <>
+      <CreateCollectionButton />
+      <div className="flex flex-col gap-4">
+        {/* Collections: {collections.length} */}
+        {collections.map((collection) => (
+          <Collectioncard key={collection.id} collection={collection} />
+        ))}
+      </div>
+    </>
+  );
 }

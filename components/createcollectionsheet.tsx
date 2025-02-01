@@ -24,6 +24,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
 
 import {
   Select,
@@ -35,6 +36,8 @@ import {
 import { CollectionCollor, CollectionCollors } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { Separator } from "./ui/separator";
+import { createCollection } from "@/actions/collection";
+import { toast, useToast } from "@/hooks/use-toast";
 
 interface Props {
   open: boolean;
@@ -47,14 +50,34 @@ const CreateCollectionSheet = ({ open, onOpenChange }: Props) => {
     resolver: zodResolver(createCollectionSchema),
   });
 
-  const onSubmit = (data: createCollectionSchemaType) => {
+  const router = useRouter();
+
+  const onSubmit = async (data: createCollectionSchemaType) => {
     console.log("submitted", data);
+    try {
+      createCollection(data);
+      onOpenChangeWrapper(false);
+      router.refresh();
+      toast({
+        title: "Well Done",
+        description: "Task is created",
+      });
+    } catch (e) {
+      toast({
+        title: "OOOOPS",
+        description: "somethin gwent wrong",
+        variant: "destructive",
+      });
+      console.log("error creating");
+    }
   };
 
   const onOpenChangeWrapper = (open: boolean) => {
     form.reset();
     onOpenChange(open);
   };
+
+  const { toast } = useToast();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChangeWrapper}>
@@ -135,8 +158,9 @@ const CreateCollectionSheet = ({ open, onOpenChange }: Props) => {
               form.watch("color") &&
                 CollectionCollors[form.getValues("color") as CollectionCollor]
             )}
+            disabled={form.formState.isSubmitting}
           >
-            Submit
+            Submit {form.formState.isSubmitting && <h3>Submitting...</h3>}
           </Button>
         </div>
       </SheetContent>
