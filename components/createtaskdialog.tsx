@@ -3,6 +3,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -22,6 +23,15 @@ import {
   FormMessage,
 } from "./ui/form";
 import { Textarea } from "./ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Calendar } from "./ui/calendar";
+import { Button } from "./ui/button";
+import { FaRegCalendarAlt } from "react-icons/fa";
+import { format } from "date-fns";
+import { TfiReload } from "react-icons/tfi";
+import { createTask } from "@/actions/task";
+import { toast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 interface Props {
   open: boolean;
@@ -39,15 +49,32 @@ const CreateTaskDialog = ({ open, collection, setOpen }: Props) => {
 
   const openChangeWrapper = (value: boolean) => {
     setOpen(value);
+    form.reset();
   };
+
+  const router = useRouter();
 
   const onSubmit = async (data: createTaskSchemaType) => {
     console.log("ausmbited", data);
+    try {
+      await createTask(data);
+      toast({
+        title: "created",
+        description: "tasd creation siccess",
+      });
+      openChangeWrapper(false);
+      router.refresh();
+    } catch (e) {
+      toast({
+        title: "error",
+        description: "error creating",
+      });
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={openChangeWrapper}>
-      <DialogTrigger>Open</DialogTrigger>
+      {/* <DialogTrigger>Open</DialogTrigger> */}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
@@ -91,12 +118,36 @@ const CreateTaskDialog = ({ open, collection, setOpen }: Props) => {
 
               <FormField
                 control={form.control}
-                name="expires at"
+                name="expiresAt"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Expires At:</FormLabel>
                     <FormDescription>When the task expires</FormDescription>
-                    <FormControl></FormControl>
+                    <FormControl>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className={cn(
+                              "justify-start text-left font-normal w-full",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            <FaRegCalendarAlt />
+                            {field.value && format(field.value, "PPP")}
+                            {!field.value && <span>No expiration</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent>
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -104,6 +155,21 @@ const CreateTaskDialog = ({ open, collection, setOpen }: Props) => {
             </form>
           </Form>
         </div>
+        <DialogFooter>
+          <Button
+            disabled={form.formState.isSubmitting}
+            className={cn(
+              "w-full dark:text-white",
+              CollectionCollors[collection.color as CollectionCollor]
+            )}
+            onClick={form.handleSubmit(onSubmit)}
+          >
+            confirm{" "}
+            {form.formState.isSubmitting && (
+              <TfiReload className="animate-spin h-4" />
+            )}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

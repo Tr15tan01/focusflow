@@ -9,7 +9,7 @@ import {
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 import { CollectionCollor, CollectionCollors } from "@/lib/constants";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { CiCircleChevDown, CiCircleChevUp } from "react-icons/ci";
 import { Progress } from "./ui/progress";
 import { Separator } from "./ui/separator";
@@ -30,6 +30,7 @@ import { deleteCollection } from "@/actions/collection";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import CreateTaskDialog from "./createtaskdialog";
+import TaskCard from "./taskcard";
 
 interface Props {
   collection: Collection & { tasks: Task[] };
@@ -62,9 +63,17 @@ const Collectioncard = ({ collection }: Props) => {
     }
   };
 
+  const tasksDone = useMemo(() => {
+    return collection.tasks.filter((task) => task.done).length;
+  }, [collection.tasks]);
+
+  const totalTasks = collection.tasks.length;
+
+  const progress = totalTasks === 0 ? 0 : (tasksDone / totalTasks) * 100;
+
   return (
     <div>
-      {collection.name}
+      {/* {collection.name} */}
       <CreateTaskDialog
         open={showCreateModal}
         setOpen={setShowCreateModal}
@@ -85,13 +94,15 @@ const Collectioncard = ({ collection }: Props) => {
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent className="flex rounded-b-md flex-col dark:bg-neutral-900 shadow-lg">
-          {tasks.length === 0 && <div>No tasks yet</div>}
+          {tasks.length === 0 && (
+            <div className="p-4 justify-center">No tasks yet</div>
+          )}
           {tasks.length > 0 && (
             <>
-              <Progress className="rounded-none" value={45} />
+              <Progress className="rounded-none" value={progress} />
               <div>
                 {tasks.map((task) => (
-                  <div>mocked task</div>
+                  <TaskCard key={task.id} task={task} />
                 ))}
               </div>
             </>
