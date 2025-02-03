@@ -54,6 +54,7 @@ const WelcomeMessageFallback = () => {
 
 async function CollectionList() {
   const user = await currentUser();
+  if (!user) return <div>Not Signed In</div>;
   const collections = await prisma.collection.findMany({
     include: {
       tasks: true,
