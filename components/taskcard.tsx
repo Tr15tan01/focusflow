@@ -18,7 +18,7 @@ const TaskCard = ({ task }: { task: Task }) => {
   const [isLoading, startTransition] = useTransition();
   const router = useRouter();
   return (
-    <div className="flex gap-2 items-start">
+    <div className="flex gap-2 items-start my-3">
       <Checkbox
         id={task.id.toString()}
         className="w-5 h-5"

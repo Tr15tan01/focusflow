@@ -9,7 +9,7 @@ const CreateCollectionButton = () => {
   const handleOpenChange = (open: boolean) => setOpen(open);
 
   return (
-    <div className="min-w-[400px] rounded-md bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 p-[2px]">
+    <div className="min-w-[400px] rounded-md bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 p-[2px] m-7">
       <Button
         variant={"outline"}
         className="w-full dark: bg-neutral-950 text-white"

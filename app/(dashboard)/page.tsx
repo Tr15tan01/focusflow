@@ -7,7 +7,7 @@ import { wait } from "@/lib/wait";
 import {
   // ClerkProvider,
   SignInButton,
-  // SignedIn,
+  SignedIn,
   SignedOut,
   // UserButton,
 } from "@clerk/nextjs";
@@ -32,7 +32,18 @@ const WelcomeMessage = async () => {
   const user = await currentUser();
   await wait(3000);
   console.log(user?.firstName, "user is here");
-  if (!user) return <div>Not Silgned In!!!</div>;
+
+  if (!user)
+    return (
+      <div>
+        Not Silgned In!!!
+        <SignedOut>
+          <div className="width-full bg-slate-300 rounded-md m-7 px-7 py-3 dark:bg-red-600">
+            <SignInButton />
+          </div>
+        </SignedOut>
+      </div>
+    );
 
   return (
     <div className="flex flex-col w-full items-center page-transition bg-blue-500 p-6">
