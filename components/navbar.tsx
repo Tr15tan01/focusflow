@@ -4,7 +4,7 @@ import ThemeSwitcher from "./themeswitcher";
 
 export default function NavBar() {
   return (
-    <nav className="flex w-full items-center justify-between p-4 px-8 h-[60px]">
+    <nav className="flex w-full items-center justify-between p-4 px-8 h-[60px] bg-slate-700">
       <Logo />
       navbar
       <div className="flex gap-4">

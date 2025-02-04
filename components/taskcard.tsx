@@ -21,7 +21,7 @@ const TaskCard = ({ task }: { task: Task }) => {
     <div className="flex gap-2 items-start my-3">
       <Checkbox
         id={task.id.toString()}
-        className="w-5 h-5"
+        className="w-5 h-5 m-3"
         checked={task.done}
         disabled={isLoading}
         onCheckedChange={() => {

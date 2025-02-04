@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
-        <body className="flex flex-col min-h-screen items-center bg-slate-500">
+        <body className="flex flex-col min-h-screen items-center">
           <ThemeProvider
             attribute="class"
             enableSystem={true}
@@ -38,7 +38,7 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <NavBar />
-            <div className="flex flex-col w-auto  mx-auto min-h-screen items-center justify-center p-4 px-8 bg-neutral-300 dark:bg-black">
+            <div className="flex flex-col w-full md:w-3/4 mx-auto min-h-screen items-center justify-center">
               <Separator />
               {/* <main className="flex flex-grow w-full justify-center dark:bg-neutral-950"> */}
               {children}

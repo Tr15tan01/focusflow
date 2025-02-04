@@ -72,7 +72,7 @@ const Collectioncard = ({ collection }: Props) => {
   const progress = totalTasks === 0 ? 0 : (tasksDone / totalTasks) * 100;
 
   return (
-    <div>
+    <div className="w-full ">
       {/* {collection.name} */}
       <CreateTaskDialog
         open={showCreateModal}
@@ -99,7 +99,11 @@ const Collectioncard = ({ collection }: Props) => {
           )}
           {tasks.length > 0 && (
             <>
-              <Progress className="rounded-none" value={progress} />
+              <Progress
+                className="rounded-none bg-red-500 dark:bg-red-600 h-[12px] my-[1px]"
+                value={progress}
+              />
+
               <div>
                 {tasks.map((task) => (
                   <TaskCard key={task.id} task={task} />

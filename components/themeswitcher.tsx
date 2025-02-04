@@ -18,7 +18,7 @@ export default function ThemeSwitcher() {
 
   return (
     <Tabs defaultValue={theme}>
-      <TabsList>
+      <TabsList className="bg-slate-500 text-white">
         <TabsTrigger value="light" onClick={(e) => setTheme("light")}>
           <SunIcon />
         </TabsTrigger>
