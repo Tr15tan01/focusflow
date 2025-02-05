@@ -7,7 +7,6 @@ import { wait } from "@/lib/wait";
 import {
   // ClerkProvider,
   SignInButton,
-  SignedIn,
   SignedOut,
   // UserButton,
 } from "@clerk/nextjs";

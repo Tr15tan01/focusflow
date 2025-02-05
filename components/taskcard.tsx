@@ -2,7 +2,6 @@ import { Task } from "@prisma/client";
 import { Checkbox } from "./ui/checkbox";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Label } from "./ui/label";
 import { useTransition } from "react";
 import { setTaskDone } from "@/actions/task";
 import { useRouter } from "next/navigation";

@@ -54,7 +54,7 @@ const Collectioncard = ({ collection }: Props) => {
         title: "success",
         description: "collection deleted scuuess",
       });
-    } catch (e) {
+    } catch {
       toast({
         title: "error",
         description: "collection deletion problem",

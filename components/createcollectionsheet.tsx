@@ -37,7 +37,7 @@ import { CollectionCollor, CollectionCollors } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { Separator } from "./ui/separator";
 import { createCollection } from "@/actions/collection";
-import { toast, useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 interface Props {
   open: boolean;
@@ -62,7 +62,7 @@ const CreateCollectionSheet = ({ open, onOpenChange }: Props) => {
         title: "Well Done",
         description: "Task is created",
       });
-    } catch (e) {
+    } catch {
       toast({
         title: "OOOOPS",
         description: "somethin gwent wrong",

@@ -1,17 +1,10 @@
 "use client";
 
-import {
-  ClerkProvider,
-  SignInButton,
-  SignedIn,
-  SignedOut,
-  UserButton,
-} from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import NavBar from "@/components/navbar";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Separator } from "@radix-ui/react-separator";
-import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 
 export default function RootLayout({

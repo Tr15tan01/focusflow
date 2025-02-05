@@ -42,7 +42,7 @@ export async function createTask(data: createTaskSchemaType) {
 // }
 
 export async function setTaskDone(id: number) {
-  const user = currentUser();
+  const user = await currentUser();
   if (!user) {
     throw new Error("no user");
   }
