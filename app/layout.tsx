@@ -1,11 +1,18 @@
-"use client";
+// "use client";
 
+import { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import NavBar from "@/components/navbar";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Separator } from "@radix-ui/react-separator";
 import { Toaster } from "@/components/ui/toaster";
+
+export const metadata: Metadata = {
+  title: "Task Reminder",
+  description: "Tasks reminder app.",
+  metadataBase: new URL("https://next-learn-dashboard.vercel.sh"),
+};
 
 export default function RootLayout({
   children,
