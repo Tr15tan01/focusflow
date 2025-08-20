@@ -26,21 +26,6 @@ export async function createTask(data: createTaskSchemaType) {
   });
 }
 
-// export async function setTaskDone(id: number) {
-//   const user = currentUser();
-//   if (!user) {
-//     throw new Error("no user");
-//   }
-
-//   return await prisma.task.update({
-//     where: {
-//       id: id,
-//       userId: user.id,
-//     },
-//     data: { done: true },
-//   });
-// }
-
 export async function setTaskDone(id: number) {
   const user = await currentUser();
   if (!user) {
@@ -67,5 +52,38 @@ export async function setTaskDone(id: number) {
       userId: user.id,
     },
     data: { done: !task.done },
+  });
+}
+
+// delete subtask
+export async function deleteTask(id: number) {
+  const user = await currentUser();
+  if (!user) {
+    throw new Error("no user found");
+  }
+
+  return await prisma.task.delete({
+    where: {
+      id: id,
+      userId: user.id,
+    },
+  });
+}
+
+// update
+export async function updateTask(id: number, content: string) {
+  const user = await currentUser();
+  if (!user) {
+    throw new Error("no user found");
+  }
+
+  return await prisma.task.update({
+    where: {
+      id: id,
+      userId: user.id,
+    },
+    data: {
+      content: content,
+    },
   });
 }
