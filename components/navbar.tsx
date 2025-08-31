@@ -1,21 +1,4 @@
 // import { UserButton } from "@clerk/nextjs";
-// import Logo from "./logo";
-// import ThemeSwitcher from "./themeswitcher";
-
-// export default function NavBar() {
-//   return (
-//     <nav className="flex w-full items-center justify-between p-4 px-8 h-[60px] bg-slate-700">
-//       <Logo />
-//       navbar
-//       <div className="flex gap-4">
-//         <UserButton afterSignOutUrl="/" />
-//         <ThemeSwitcher />
-//       </div>
-//     </nav>
-//   );
-// }
-
-import { UserButton } from "@clerk/nextjs";
 import Logo from "./logo";
 import ThemeSwitcher from "./themeswitcher";
 
@@ -25,7 +8,7 @@ export default function NavBar() {
       <div className="flex items-center space-x-4">
         <Logo />
         <span className="text-lg font-medium text-gray-800 dark:text-gray-200 hidden md:inline-block">
-          Percentage
+          Flow
         </span>
       </div>
 
@@ -79,7 +62,7 @@ export default function NavBar() {
         <div className="h-6 border-l border-gray-300 dark:border-gray-600"></div>
 
         <div className="flex items-center gap-2">
-          <UserButton
+          {/* <UserButton
             afterSignOutUrl="/"
             appearance={{
               elements: {
@@ -90,7 +73,7 @@ export default function NavBar() {
                 userButtonPopoverFooter: "hidden",
               },
             }}
-          />
+          /> */}
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300 hidden md:inline-block">
             Profile
           </span>
