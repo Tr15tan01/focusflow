@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { Play, RotateCcw, Volume2, VolumeX, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +45,8 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
   const messageIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const beepSoundRef = useRef<HTMLAudioElement | null>(null);
   const clickSoundRef = useRef<HTMLAudioElement | null>(null);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastUpdateTimeRef = useRef<number>(0); // Fixed: Added this missing ref
 
   // Initialize audio elements
   useEffect(() => {
@@ -62,8 +64,43 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
       if (messageIntervalRef.current) {
         clearInterval(messageIntervalRef.current);
       }
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
     };
   }, []);
+
+  // Handle tab visibility changes to keep timer accurate
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && state === "running") {
+        // Tab is hidden, store the current time
+        lastUpdateTimeRef.current = Date.now();
+      } else if (!document.hidden && state === "running") {
+        // Tab is visible again, calculate time passed
+        const timePassed = Math.floor(
+          (Date.now() - lastUpdateTimeRef.current) / 1000
+        );
+        if (timePassed > 0) {
+          setTimeLeft((prev) => {
+            const newTime = Math.max(0, prev - timePassed);
+            if (newTime === 0) {
+              setState("completed");
+              playBeepSound();
+              return 0;
+            }
+            return newTime;
+          });
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [state]);
 
   // Play click sound
   const playClickSound = useCallback(() => {
@@ -108,6 +145,25 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
     setTimeLeft(totalSeconds);
     setState("running");
     onTimerStart();
+    lastUpdateTimeRef.current = Date.now();
+
+    // Clear any existing interval
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+    }
+
+    // Start new interval
+    timerIntervalRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 0) {
+          clearInterval(timerIntervalRef.current as NodeJS.Timeout);
+          setState("completed");
+          playBeepSound();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
     // Start message rotation every 3 minutes (180 seconds)
     if (messageIntervalRef.current) {
@@ -124,7 +180,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
 
     // Smooth transition to timer view
     setTimeout(() => setShowTimer(true), 100);
-  }, [hours, minutes, playClickSound, onTimerStart]);
+  }, [hours, minutes, playClickSound, onTimerStart, playBeepSound]);
 
   // Reset the timer
   const resetTimer = useCallback(() => {
@@ -134,6 +190,12 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
     setInitialTime(0);
     setShowTimer(false);
     onTimerReset();
+
+    // Clear intervals
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
 
     if (messageIntervalRef.current) {
       clearInterval(messageIntervalRef.current);
@@ -145,49 +207,41 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
   const pauseTimer = useCallback(() => {
     playClickSound();
     setState("paused");
+
+    // Clear the timer interval
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
   }, [playClickSound]);
 
   // Resume the timer
   const resumeTimer = useCallback(() => {
     playClickSound();
     setState("running");
-  }, [playClickSound]);
+    lastUpdateTimeRef.current = Date.now();
+
+    // Start the timer interval again
+    if (!timerIntervalRef.current) {
+      timerIntervalRef.current = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 0) {
+            clearInterval(timerIntervalRef.current as NodeJS.Timeout);
+            setState("completed");
+            playBeepSound();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+  }, [playClickSound, playBeepSound]);
 
   // Toggle sound
   const toggleSound = useCallback(() => {
     setSoundEnabled((prev) => !prev);
     playClickSound();
   }, [playClickSound]);
-
-  // Handle timer completion
-  useEffect(() => {
-    if (state === "running" && timeLeft === 0 && initialTime > 0) {
-      setState("completed");
-      playBeepSound();
-
-      if (messageIntervalRef.current) {
-        clearInterval(messageIntervalRef.current);
-        messageIntervalRef.current = null;
-      }
-    }
-  }, [timeLeft, state, initialTime, playBeepSound]);
-
-  // Timer countdown logic
-  useEffect(() => {
-    if (state !== "running") return;
-
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 0) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [state]);
 
   // Generate hour options (0-12)
   const hourOptions = Array.from({ length: 13 }, (_, i) => i);
@@ -333,6 +387,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                 onClick={pauseTimer}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-full text-lg font-semibold shadow-lg"
               >
+                <Pause className="mr-2 h-5 w-5" />
                 Pause
               </Button>
             )}
@@ -342,6 +397,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                 onClick={resumeTimer}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-full text-lg font-semibold shadow-lg"
               >
+                <Play className="mr-2 h-5 w-5" />
                 Resume
               </Button>
             )}
