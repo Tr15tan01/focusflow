@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Play, RotateCcw, Volume2, VolumeX, Pause } from "lucide-react";
+import { Play, Square, RotateCcw, Volume2, VolumeX, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -41,23 +41,37 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [currentMessage, setCurrentMessage] = useState(FOCUS_MESSAGES[0]);
   const [showTimer, setShowTimer] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const messageIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const beepSoundRef = useRef<HTMLAudioElement | null>(null);
   const clickSoundRef = useRef<HTMLAudioElement | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const lastUpdateTimeRef = useRef<number>(0); // Fixed: Added this missing ref
+  const lastUpdateTimeRef = useRef<number>(0);
 
-  // Initialize audio elements
+  // Preload audio files for immediate playback
   useEffect(() => {
-    // Create audio elements without source to avoid hydration issues
-    beepSoundRef.current = new Audio();
-    clickSoundRef.current = new Audio();
+    // Preload audio files
+    const preloadAudio = () => {
+      try {
+        // Create and preload click sound
+        clickSoundRef.current = new Audio();
+        clickSoundRef.current.src = "/media/click.mp3";
+        clickSoundRef.current.preload = "auto";
+        clickSoundRef.current.load();
 
-    // Set sources after component mounts (client-side only)
+        // Create and preload beep sound
+        beepSoundRef.current = new Audio();
+        beepSoundRef.current.src = "/media/beep.mp3";
+        beepSoundRef.current.preload = "auto";
+        beepSoundRef.current.load();
+      } catch (error) {
+        console.error("Error preloading audio:", error);
+      }
+    };
+
     if (typeof window !== "undefined") {
-      beepSoundRef.current.src = "/media/beep.mp3";
-      clickSoundRef.current.src = "/media/click.mp3";
+      preloadAudio();
     }
 
     return () => {
@@ -102,19 +116,28 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
     };
   }, [state]);
 
-  // Play click sound
+  // Optimized sound playback with immediate response
   const playClickSound = useCallback(() => {
     if (soundEnabled && clickSoundRef.current) {
-      clickSoundRef.current.currentTime = 0;
-      clickSoundRef.current.play().catch(() => {});
+      try {
+        // Create a new audio instance each time for immediate playback
+        const clickSound = new Audio("/media/click.mp3");
+        clickSound.play().catch((e) => console.log("Audio play failed:", e));
+      } catch (error) {
+        console.error("Error playing click sound:", error);
+      }
     }
   }, [soundEnabled]);
 
-  // Play beep sound
   const playBeepSound = useCallback(() => {
     if (soundEnabled && beepSoundRef.current) {
-      beepSoundRef.current.currentTime = 0;
-      beepSoundRef.current.play().catch(() => {});
+      try {
+        // Create a new audio instance for the beep sound
+        const beepSound = new Audio("/media/beep.mp3");
+        beepSound.play().catch((e) => console.log("Audio play failed:", e));
+      } catch (error) {
+        console.error("Error playing beep sound:", error);
+      }
     }
   }, [soundEnabled]);
 
@@ -134,6 +157,24 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
     }
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
+
+  // Smooth transition to timer view
+  const startTimerTransition = useCallback(() => {
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setShowTimer(true);
+      setIsTransitioning(false);
+    }, 300);
+  }, []);
+
+  // Smooth transition away from timer view
+  const resetTimerTransition = useCallback(() => {
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setShowTimer(false);
+      setIsTransitioning(false);
+    }, 300);
+  }, []);
 
   // Start the timer
   const startTimer = useCallback(() => {
@@ -179,8 +220,15 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
     }, 180000); // 3 minutes in milliseconds
 
     // Smooth transition to timer view
-    setTimeout(() => setShowTimer(true), 100);
-  }, [hours, minutes, playClickSound, onTimerStart, playBeepSound]);
+    startTimerTransition();
+  }, [
+    hours,
+    minutes,
+    playClickSound,
+    onTimerStart,
+    playBeepSound,
+    startTimerTransition,
+  ]);
 
   // Reset the timer
   const resetTimer = useCallback(() => {
@@ -188,7 +236,6 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
     setState("idle");
     setTimeLeft(0);
     setInitialTime(0);
-    setShowTimer(false);
     onTimerReset();
 
     // Clear intervals
@@ -201,7 +248,10 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
       clearInterval(messageIntervalRef.current);
       messageIntervalRef.current = null;
     }
-  }, [playClickSound, onTimerReset]);
+
+    // Smooth transition away from timer view
+    resetTimerTransition();
+  }, [playClickSound, onTimerReset, resetTimerTransition]);
 
   // Pause the timer
   const pauseTimer = useCallback(() => {
@@ -252,8 +302,15 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
   return (
     <div className="flex flex-col items-center justify-center py-8 px-4 min-h-[70vh]">
       {!showTimer ? (
-        // Time selection UI
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-md transition-all duration-500">
+        // Time selection UI with smooth transition
+        <div
+          className={cn(
+            "bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-md transition-all duration-300",
+            isTransitioning
+              ? "opacity-0 scale-95 -translate-y-4"
+              : "opacity-100 scale-100 translate-y-0"
+          )}
+        >
           <h3 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-white">
             Set Focus Time
           </h3>
@@ -269,7 +326,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                   setHours(parseInt(e.target.value));
                   playClickSound();
                 }}
-                className="w-20 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center text-xl"
+                className="w-20 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center text-xl transition-all duration-200 hover:scale-105 focus:scale-105 focus:ring-2 focus:ring-purple-500"
               >
                 {hourOptions.map((hour) => (
                   <option key={hour} value={hour}>
@@ -291,7 +348,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                   setMinutes(parseInt(e.target.value));
                   playClickSound();
                 }}
-                className="w-20 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center text-xl"
+                className="w-20 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center text-xl transition-all duration-200 hover:scale-105 focus:scale-105 focus:ring-2 focus:ring-purple-500"
               >
                 {minuteOptions.map((minute) => (
                   <option key={minute} value={minute}>
@@ -305,15 +362,20 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
           <Button
             onClick={startTimer}
             disabled={hours === 0 && minutes === 0}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl text-lg font-semibold shadow-lg transition-all"
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl text-lg font-semibold shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
           >
             <Play className="mr-2 h-5 w-5" />
             Start Focus Session
           </Button>
         </div>
       ) : (
-        // Timer display UI
-        <div className="w-full flex flex-col items-center justify-center transition-all duration-500">
+        // Timer display UI with smooth transition
+        <div
+          className={cn(
+            "w-full flex flex-col items-center justify-center transition-all duration-300",
+            isTransitioning ? "opacity-0 scale-95" : "opacity-100 scale-100"
+          )}
+        >
           {/* Timer display */}
           <div className="relative w-80 h-80 md:w-96 md:h-96 mb-8">
             <svg
@@ -328,7 +390,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="8"
-                className="text-gray-200 dark:text-gray-700"
+                className="text-gray-200 dark:text-gray-700 transition-all duration-1000"
               />
               {/* Progress circle */}
               <circle
@@ -354,7 +416,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <div
                 className={cn(
-                  "text-4xl md:text-5xl font-mono font-bold",
+                  "text-4xl md:text-5xl font-mono font-bold transition-all duration-500",
                   state === "completed"
                     ? "text-red-600 animate-pulse"
                     : "text-purple-700"
@@ -362,12 +424,12 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
               >
                 {formatTime(timeLeft)}
               </div>
-              <div className="text-sm mt-2 text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+              <div className="text-sm mt-2 text-gray-600 dark:text-gray-300 uppercase tracking-wider transition-opacity duration-500">
                 Focus Time
               </div>
               {state === "completed" && (
-                <div className="text-lg font-semibold mt-2 animate-pulse">
-                  Time is up!
+                <div className="text-lg font-semibold mt-2 animate-pulse text-red-500 transition-all duration-500">
+                  Time's up!
                 </div>
               )}
             </div>
@@ -375,7 +437,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
 
           {/* Motivational message */}
           <div className="text-center max-w-md mb-8 px-4">
-            <p className="text-lg text-gray-700 dark:text-gray-300 italic">
+            <p className="text-lg text-gray-700 dark:text-gray-300 italic transition-opacity duration-500">
               {currentMessage}
             </p>
           </div>
@@ -385,7 +447,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
             {state === "running" && (
               <Button
                 onClick={pauseTimer}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-full text-lg font-semibold shadow-lg"
+                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-full text-lg font-semibold shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
               >
                 <Pause className="mr-2 h-5 w-5" />
                 Pause
@@ -395,7 +457,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
             {state === "paused" && (
               <Button
                 onClick={resumeTimer}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-full text-lg font-semibold shadow-lg"
+                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-full text-lg font-semibold shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
               >
                 <Play className="mr-2 h-5 w-5" />
                 Resume
@@ -406,7 +468,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
               <Button
                 onClick={resetTimer}
                 variant="outline"
-                className="border-gray-500 text-gray-600 hover:bg-gray-50 px-6 py-3 rounded-full text-lg font-semibold"
+                className="border-gray-500 text-gray-600 hover:bg-gray-50 px-6 py-3 rounded-full text-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95"
               >
                 <RotateCcw className="mr-2 h-5 w-5" />
                 Reset
@@ -416,7 +478,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
             {state === "completed" && (
               <Button
                 onClick={resetTimer}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full text-lg font-semibold shadow-lg"
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full text-lg font-semibold shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
               >
                 <RotateCcw className="mr-2 h-5 w-5" />
                 Start New Session
@@ -427,7 +489,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
               onClick={toggleSound}
               variant="ghost"
               size="icon"
-              className="rounded-full w-12 h-12"
+              className="rounded-full w-12 h-12 transition-all duration-200 hover:scale-110 active:scale-95"
             >
               {soundEnabled ? (
                 <Volume2 className="h-6 w-6" />
