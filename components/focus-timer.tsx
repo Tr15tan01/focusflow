@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Play, Square, RotateCcw, Volume2, VolumeX, Pause } from "lucide-react";
+import { Play, RotateCcw, Volume2, VolumeX, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -429,7 +429,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
               </div>
               {state === "completed" && (
                 <div className="text-lg font-semibold mt-2 animate-pulse text-red-500 transition-all duration-500">
-                  Time's up!
+                  Time&apos;s up!
                 </div>
               )}
             </div>
