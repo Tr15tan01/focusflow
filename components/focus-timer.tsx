@@ -15,11 +15,11 @@ import {
   Settings,
   ChevronDown,
   ChevronUp,
+  Timer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAudioPlayer } from "@/hooks/use-audio-player";
-import { createTimerWorker } from "@/utils/timer-worker";
 
 const FOCUS_MESSAGES = [
   "Stay focused, you're doing great!",
@@ -43,10 +43,16 @@ const FOCUS_MESSAGES = [
 // Preset time options (in minutes)
 const TIME_PRESETS = [
   {
+    label: "Quick Focus",
+    minutes: 5,
+    color: "bg-gradient-to-br from-emerald-500 to-teal-500",
+    icon: <Zap className="h-5 w-5" />,
+  },
+  {
     label: "Focus Sprint",
     minutes: 15,
     color: "bg-gradient-to-br from-blue-500 to-cyan-500",
-    icon: <Zap className="h-5 w-5" />,
+    icon: <Timer className="h-5 w-5" />,
   },
   {
     label: "Short Session",
@@ -91,21 +97,102 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
   const [currentMessage, setCurrentMessage] = useState(FOCUS_MESSAGES[0]);
   const [showTimer, setShowTimer] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [selectedPreset, setSelectedPreset] = useState<number | null>(1); // Default to 25 minutes
-  // const [showCustomInput, setShowCustomInput] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<number | null>(2); // Default to 25 minutes
   const [customTimeOpen, setCustomTimeOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   const workerRef = useRef<Worker | null>(null);
   const lastPauseTimeRef = useRef<number>(0);
   const messageIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { playClick, playBeep } = useAudioPlayer();
 
-  // Initialize Web Worker
-  // Update your useEffect to include null checks
+  // Set isClient to true on mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      // workerRef.current = new TimerWorker();
-      workerRef.current = createTimerWorker();
+    setIsClient(true);
+  }, []);
+
+  // Create worker from Blob
+  const createWorker = useCallback(() => {
+    const workerCode = `
+let timerInterval = null;
+let timerStartTime = null;
+let timerDuration = 0;
+
+self.onmessage = function(e) {
+  const { type, duration, pauseTime } = e.data;
+  
+  switch (type) {
+    case 'start':
+      if (timerInterval) clearInterval(timerInterval);
+      timerDuration = duration;
+      timerStartTime = Date.now();
+      
+      timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+        const remaining = Math.max(0, timerDuration - elapsed);
+        
+        self.postMessage({ type: 'tick', remaining, elapsed });
+        
+        if (remaining <= 0) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+          self.postMessage({ type: 'completed' });
+        }
+      }, 1000);
+      break;
+      
+    case 'pause':
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+        const remaining = Math.max(0, timerDuration - elapsed);
+        self.postMessage({ type: 'paused', remaining });
+      }
+      break;
+      
+    case 'resume':
+      if (!timerInterval && timerStartTime && timerDuration > 0) {
+        const remaining = timerDuration - Math.floor((pauseTime - timerStartTime) / 1000);
+        timerDuration = remaining;
+        timerStartTime = Date.now() - (timerDuration - remaining) * 1000;
+        
+        timerInterval = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+          const remaining = Math.max(0, timerDuration - elapsed);
+          
+          self.postMessage({ type: 'tick', remaining, elapsed });
+          
+          if (remaining <= 0) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            self.postMessage({ type: 'completed' });
+          }
+        }, 1000);
+      }
+      break;
+      
+    case 'stop':
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      timerStartTime = null;
+      timerDuration = 0;
+      self.postMessage({ type: 'stopped' });
+      break;
+  }
+};
+`;
+
+    const blob = new Blob([workerCode], { type: "application/javascript" });
+    return new Worker(URL.createObjectURL(blob));
+  }, []);
+
+  // Initialize Web Worker
+  useEffect(() => {
+    if (isClient) {
+      workerRef.current = createWorker();
 
       if (workerRef.current) {
         workerRef.current.onmessage = (e) => {
@@ -147,7 +234,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
       }
       document.title = "FocusFlow";
     };
-  }, [playBeep]);
+  }, [isClient, playBeep, createWorker]);
 
   // Update document title with remaining time
   const updateDocumentTitle = (seconds: number, completed = false) => {
@@ -232,7 +319,6 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
 
       if (preset.minutes === 0) {
         // Custom preset selected
-        // setShowCustomInput(true);
         setCustomTimeOpen(true);
         // Don't reset hours/minutes if they're already set
         if (hours === 0 && minutes === 0) {
@@ -240,7 +326,6 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
           setMinutes(25);
         }
       } else {
-        // setShowCustomInput(false);
         setCustomTimeOpen(false);
         setHours(Math.floor(preset.minutes / 60));
         setMinutes(preset.minutes % 60);
@@ -283,8 +368,8 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
   const incrementMinutes = useCallback(() => {
     if (soundEnabled) playClick();
     setMinutes((prev) => {
-      if (prev >= 55) return 0;
-      return prev + 5;
+      if (prev >= 59) return 0;
+      return prev + 1;
     });
     setSelectedPreset(null);
   }, [soundEnabled, playClick]);
@@ -292,18 +377,27 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
   const decrementMinutes = useCallback(() => {
     if (soundEnabled) playClick();
     setMinutes((prev) => {
-      if (prev <= 0) return 55;
-      return prev - 5;
+      if (prev <= 0) return 59;
+      return prev - 1;
     });
     setSelectedPreset(null);
   }, [soundEnabled, playClick]);
+
+  // Set minutes directly
+  const setMinutesDirectly = useCallback(
+    (value: number) => {
+      if (soundEnabled) playClick();
+      setMinutes(value);
+      setSelectedPreset(null);
+    },
+    [soundEnabled, playClick]
+  );
 
   // Toggle custom time section
   const toggleCustomTime = useCallback(() => {
     if (soundEnabled) playClick();
     setCustomTimeOpen(!customTimeOpen);
-    // setShowCustomInput(true);
-    setSelectedPreset(4); // Select the custom preset
+    setSelectedPreset(5); // Select the custom preset
   }, [soundEnabled, playClick, customTimeOpen]);
 
   // Start the timer
@@ -355,8 +449,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
     setState("idle");
     setTimeLeft(0);
     setInitialTime(0);
-    setSelectedPreset(1); // Reset to default preset
-    // setShowCustomInput(false);
+    setSelectedPreset(2); // Reset to default preset
     setCustomTimeOpen(false);
     onTimerReset();
 
@@ -413,35 +506,57 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
     if (!soundEnabled) playClick(); // Only play sound when enabling
   }, [soundEnabled, playClick]);
 
+  // Common minute options for quick selection
+  const commonMinutes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 45, 60];
+
+  if (!isClient) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 px-4 min-h-[70vh]">
+        <div className="w-full max-w-2xl">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-48 mx-auto mb-6"></div>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-32 bg-gray-200 dark:bg-gray-700 rounded-2xl"
+                ></div>
+              ))}
+            </div>
+            <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded-2xl mb-8"></div>
+            <div className="h-14 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center justify-center py-8 px-4 min-h-[70vh]">
       {!showTimer ? (
         // Time selection UI with smooth transition
         <div
           className={cn(
-            "bg-gradient-to-br from-white via-white to-purple-50/30 dark:from-gray-900 dark:via-gray-900 dark:to-purple-900/10 p-8 rounded-3xl shadow-2xl w-full max-w-2xl transition-all duration-300 border border-gray-100/50 dark:border-gray-700/50 backdrop-blur-sm",
+            "bg-gradient-to-br from-white via-white to-purple-50/30 dark:from-gray-900 dark:via-gray-900 dark:to-purple-900/10 p-6 md:p-8 rounded-3xl shadow-2xl w-full max-w-4xl transition-all duration-300 border border-gray-100/50 dark:border-gray-700/50 backdrop-blur-sm",
             isTransitioning
               ? "opacity-0 scale-95 -translate-y-4"
               : "opacity-100 scale-100 translate-y-0"
           )}
         >
-          <div className="text-center mb-10">
+          <div className="text-center mb-8">
             <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 bg-clip-text text-transparent dark:from-purple-400 dark:via-pink-400 dark:to-rose-400">
               Ready to Focus?
             </h2>
-            {/* <p className="text-gray-600 dark:text-gray-400 mt-2">
-              Choose your focus duration or set a custom time
-            </p> */}
           </div>
 
-          {/* Preset Selection Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          {/* Preset Selection Grid - Now 6 items */}
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 md:gap-4 mb-8">
             {TIME_PRESETS.map((preset, index) => (
               <button
                 key={index}
                 onClick={() => handlePresetSelect(index)}
                 className={cn(
-                  "relative p-5 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all duration-300 transform hover:scale-105 active:scale-95 border-2 group",
+                  "relative p-4 md:p-5 rounded-2xl flex flex-col items-center justify-center gap-1 md:gap-2 transition-all duration-300 transform hover:scale-105 active:scale-95 border-2 group",
                   selectedPreset === index
                     ? "border-purple-500/80 dark:border-purple-400/80 shadow-xl shadow-purple-200/50 dark:shadow-purple-900/30"
                     : "border-transparent hover:border-gray-200/50 dark:hover:border-gray-600/50",
@@ -456,7 +571,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                 {preset.icon && (
                   <div
                     className={cn(
-                      "p-3 rounded-full mb-2 relative z-10",
+                      "p-2 md:p-3 rounded-full mb-1 md:mb-2 relative z-10",
                       selectedPreset === index
                         ? "bg-white/30 backdrop-blur-sm"
                         : "bg-white/20 backdrop-blur-sm"
@@ -467,7 +582,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                 )}
                 <span
                   className={cn(
-                    "font-bold text-lg relative z-10",
+                    "font-bold text-base md:text-lg relative z-10 text-center",
                     preset.minutes === 0
                       ? "text-gray-800 dark:text-gray-200"
                       : "text-white"
@@ -477,7 +592,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                 </span>
                 <span
                   className={cn(
-                    "text-xs opacity-90 relative z-10",
+                    "text-xs opacity-90 relative z-10 text-center",
                     preset.minutes === 0
                       ? "text-gray-600 dark:text-gray-400"
                       : "text-white/90"
@@ -493,16 +608,20 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
           <div className="mb-8">
             <div className="bg-gradient-to-br from-gray-50/80 to-purple-50/50 dark:from-gray-800/80 dark:to-purple-900/20 p-6 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm shadow-inner">
               <div className="flex flex-col items-center">
-                <div className="text-5xl md:text-6xl font-bold text-gray-900 dark:text-white mb-2 flex items-center justify-center">
+                <div className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-2 flex items-center justify-center">
                   <span className="bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-400 dark:to-pink-400 bg-clip-text text-transparent">
                     {hours > 0 ? `${hours}h ` : ""}
                     {minutes}m
                   </span>
                 </div>
-                <div className="text-lg text-gray-600 dark:text-gray-400 mb-4">
+                <div className="text-base md:text-lg text-gray-600 dark:text-gray-400 mb-4 text-center">
                   Total:{" "}
                   <span className="font-semibold text-purple-600 dark:text-purple-400">
                     {hours * 60 + minutes} minutes
+                  </span>
+                  {" • "}
+                  <span className="text-sm">
+                    {hours * 3600 + minutes * 60} seconds
                   </span>
                 </div>
 
@@ -510,14 +629,14 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                 <button
                   onClick={toggleCustomTime}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105",
+                    "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500",
                     customTimeOpen
                       ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
                       : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                   )}
                 >
                   <Settings className="h-4 w-4" />
-                  {customTimeOpen ? "Hide Custom Settings" : "Custom Time"}
+                  {customTimeOpen ? "Hide Settings" : "Custom Time"}
                   {customTimeOpen ? (
                     <ChevronUp className="h-4 w-4" />
                   ) : (
@@ -532,7 +651,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
           <div
             className={cn(
               "mb-8 transition-all duration-500 ease-in-out overflow-hidden",
-              customTimeOpen ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+              customTimeOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"
             )}
           >
             <div className="bg-gradient-to-br from-white to-purple-50/50 dark:from-gray-900 dark:to-purple-900/10 p-6 rounded-2xl border border-purple-200/50 dark:border-purple-800/30 backdrop-blur-sm shadow-lg">
@@ -542,21 +661,21 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
 
               <div className="flex flex-col md:flex-row items-center justify-center gap-8">
                 {/* Hours Selection */}
-                <div className="flex flex-col items-center">
+                <div className="flex flex-col items-center w-full md:w-auto">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wider">
                     Hours
                   </label>
                   <div className="flex items-center gap-4">
                     <button
                       onClick={decrementHours}
-                      className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 hover:from-gray-200 hover:to-gray-300 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+                      className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 hover:from-gray-200 hover:to-gray-300 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 hover:scale-110 active:scale-95 shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
                       -
                     </button>
 
                     <div className="relative">
                       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500/10 to-pink-500/10 dark:from-purple-500/20 dark:to-pink-500/20 flex items-center justify-center">
-                        <div className="w-20 h-20 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center shadow-inner">
+                        <div className="w-20 h-20 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center shadow-inner border border-gray-200/50 dark:border-gray-700/50">
                           <span className="text-3xl font-bold text-gray-900 dark:text-white">
                             {hours}
                           </span>
@@ -569,19 +688,19 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
 
                     <button
                       onClick={incrementHours}
-                      className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 hover:from-gray-200 hover:to-gray-300 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+                      className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 hover:from-gray-200 hover:to-gray-300 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 hover:scale-110 active:scale-95 shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
                       +
                     </button>
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2 justify-center">
-                    {[0, 1, 2, 3, 4].map((hour) => (
+                    {[0, 1, 2, 3, 4, 5].map((hour) => (
                       <button
                         key={hour}
                         onClick={() => handleCustomTimeChange("hours", hour)}
                         className={cn(
-                          "px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105",
+                          "px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500",
                           hours === hour
                             ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md"
                             : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -599,21 +718,21 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                 </div>
 
                 {/* Minutes Selection */}
-                <div className="flex flex-col items-center">
+                <div className="flex flex-col items-center w-full md:w-auto">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wider">
                     Minutes
                   </label>
                   <div className="flex items-center gap-4">
                     <button
                       onClick={decrementMinutes}
-                      className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 hover:from-gray-200 hover:to-gray-300 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+                      className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 hover:from-gray-200 hover:to-gray-300 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 hover:scale-110 active:scale-95 shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
                       -
                     </button>
 
                     <div className="relative">
                       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-pink-500/10 to-rose-500/10 dark:from-pink-500/20 dark:to-rose-500/20 flex items-center justify-center">
-                        <div className="w-20 h-20 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center shadow-inner">
+                        <div className="w-20 h-20 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center shadow-inner border border-gray-200/50 dark:border-gray-700/50">
                           <span className="text-3xl font-bold text-gray-900 dark:text-white">
                             {minutes}
                           </span>
@@ -626,26 +745,24 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
 
                     <button
                       onClick={incrementMinutes}
-                      className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 hover:from-gray-200 hover:to-gray-300 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+                      className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 hover:from-gray-200 hover:to-gray-300 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 hover:scale-110 active:scale-95 shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
                       +
                     </button>
                   </div>
 
                   {/* Quick minute buttons */}
-                  <div className="mt-4">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-2">
-                      Quick select:
+                  <div className="mt-4 w-full">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-3">
+                      Quick select minutes:
                     </p>
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {[5, 10, 15, 20, 25, 30, 45, 60].map((minute) => (
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 justify-center max-w-2xl mx-auto">
+                      {commonMinutes.map((minute) => (
                         <button
                           key={minute}
-                          onClick={() =>
-                            handleCustomTimeChange("minutes", minute)
-                          }
+                          onClick={() => setMinutesDirectly(minute)}
                           className={cn(
-                            "px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105",
+                            "px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500",
                             minutes === minute
                               ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md"
                               : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -658,6 +775,35 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                   </div>
                 </div>
               </div>
+
+              {/* Minute input for exact values */}
+              <div className="mt-8 pt-6 border-t border-gray-200/50 dark:border-gray-700/50">
+                <div className="flex flex-col items-center">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    Set exact minutes (1-59):
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min="0"
+                      max="59"
+                      value={minutes}
+                      onChange={(e) =>
+                        setMinutesDirectly(Number(e.target.value))
+                      }
+                      className="w-64 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gradient-to-r [&::-webkit-slider-thumb]:from-purple-500 [&::-webkit-slider-thumb]:to-pink-500"
+                    />
+                    <div className="w-16 text-center">
+                      <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {minutes}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 block">
+                        min
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -666,7 +812,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
             onClick={startTimer}
             disabled={hours === 0 && minutes === 0}
             className={cn(
-              "w-full bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 hover:from-purple-700 hover:via-pink-700 hover:to-rose-700 text-white py-5 rounded-xl text-lg font-semibold shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-95 group relative overflow-hidden",
+              "w-full bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 hover:from-purple-700 hover:via-pink-700 hover:to-rose-700 text-white py-5 rounded-xl text-lg font-semibold shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-95 group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2",
               hours === 0 && minutes === 0 && "opacity-60 cursor-not-allowed"
             )}
           >
@@ -691,132 +837,67 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
           )}
         >
           {/* Timer display with glow effect */}
-          <div className="relative w-80 h-80 md:w-96 md:h-96 mb-8">
-            {/* Glow effect - add will-change: transform, opacity */}
+          <div className="relative w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 mb-8">
+            {/* Glow effect */}
             <div
               className={cn(
-                "absolute inset-0 rounded-full blur-3xl transition-all duration-1000 will-change-[transform,opacity]", // Add will-change
+                "absolute inset-0 rounded-full blur-3xl transition-all duration-1000",
                 state === "completed"
                   ? "bg-gradient-to-br from-red-500/30 to-rose-600/30 animate-pulse"
                   : "bg-gradient-to-br from-purple-500/30 via-pink-500/30 to-rose-500/30"
               )}
-              style={{ willChange: "transform, opacity" }} // Alternative inline style
             />
-            {/* <svg
-              className="w-full h-full transform -rotate-90 relative z-10"
-              viewBox="0 0 100 100"
-              shapeRendering="geometricPrecision" // Add this
-            >
-              <circle
-                cx="50"
-                cy="50"
-                r="44.5" // Reduced from 45 to 44.5
-                fill="none"
-                stroke="url(#bgGradient)"
-                strokeWidth="7.5" // Reduced from 8 to 7.5
-                className="transition-all duration-1000"
-              />
 
-              <circle
-                cx="50"
-                cy="50"
-                r="44.5" // Reduced from 45 to 44.5
-                fill="none"
-                stroke="url(#progressGradient)"
-                strokeWidth="7.5" // Reduced from 8 to 7.5
-                strokeLinecap="round"
-                className={cn(
-                  "transition-all duration-1000 ease-out",
-                  state === "completed" && "animate-pulse"
-                )}
-                strokeDasharray={`${2 * Math.PI * 44.5}`}
-                strokeDashoffset={`${
-                  2 * Math.PI * 44.5 * (1 - progress / 100)
-                }`}
-              />
-            </svg> */}
+            {/* Timer SVG */}
+            <div className="relative w-full h-full">
+              <svg
+                className="w-full h-full transform -rotate-90"
+                viewBox="0 0 100 100"
+                style={{ isolation: "isolate" }}
+              >
+                {/* Background circle */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="44"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  className="text-gray-200/50 dark:text-gray-700/50 transition-all duration-1000"
+                  style={{ paintOrder: "stroke" }}
+                />
 
-            <svg
-              className="w-full h-full transform -rotate-90 relative z-10"
-              viewBox="0 0 100 100"
-              style={{ isolation: "isolate" }} // Add this
-            >
-              <defs>
-                <linearGradient
-                  id="bgGradient"
-                  x1="0%"
-                  y1="0%"
-                  x2="100%"
-                  y2="100%"
-                >
-                  <stop
-                    offset="0%"
-                    style={{ stopColor: "var(--timer-bg-start)" }}
-                  />
-                  <stop
-                    offset="100%"
-                    style={{ stopColor: "var(--timer-bg-end)" }}
-                  />
-                </linearGradient>
-                <linearGradient
-                  id="progressGradient"
-                  x1="0%"
-                  y1="0%"
-                  x2="100%"
-                  y2="100%"
-                >
-                  <stop
-                    offset="0%"
-                    style={{ stopColor: "var(--timer-progress-start)" }}
-                  />
-                  <stop
-                    offset="50%"
-                    style={{ stopColor: "var(--timer-progress-mid)" }}
-                  />
-                  <stop
-                    offset="100%"
-                    style={{ stopColor: "var(--timer-progress-end)" }}
-                  />
-                </linearGradient>
-              </defs>
+                {/* Progress circle - Fixed for dark mode */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="44"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                  className={cn(
+                    "transition-all duration-1000 ease-out",
+                    state === "completed"
+                      ? "text-red-500 dark:text-red-400 animate-pulse"
+                      : "text-purple-500 dark:text-purple-400"
+                  )}
+                  strokeDasharray={`${2 * Math.PI * 44}`}
+                  strokeDashoffset={`${
+                    2 * Math.PI * 44 * (1 - progress / 100)
+                  }`}
+                  style={{ paintOrder: "stroke" }}
+                />
+              </svg>
+            </div>
 
-              {/* Background circle */}
-              <circle
-                cx="50"
-                cy="50"
-                r="44" /* Reduced from 45 to prevent overflow */
-                fill="none"
-                stroke="url(#bgGradient)"
-                strokeWidth="8"
-                className="transition-all duration-1000"
-                style={{ paintOrder: "stroke" }} /* Add this */
-              />
-
-              {/* Progress circle */}
-              <circle
-                cx="50"
-                cy="50"
-                r="44" /* Reduced from 45 to prevent overflow */
-                fill="none"
-                stroke="url(#progressGradient)"
-                strokeWidth="8"
-                strokeLinecap="round"
-                className={cn(
-                  "transition-all duration-1000 ease-out",
-                  state === "completed" && "animate-pulse"
-                )}
-                strokeDasharray={`${2 * Math.PI * 44}`}
-                strokeDashoffset={`${2 * Math.PI * 44 * (1 - progress / 100)}`}
-                style={{ paintOrder: "stroke" }} /* Add this */
-              />
-            </svg>
             {/* Timer text */}
             <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
               <div
                 className={cn(
-                  "text-5xl md:text-7xl font-mono font-bold transition-all duration-500",
+                  "text-4xl md:text-5xl lg:text-7xl font-mono font-bold transition-all duration-500 text-center",
                   state === "completed"
-                    ? "text-red-600 animate-pulse"
+                    ? "text-red-600 dark:text-red-400 animate-pulse"
                     : "text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 dark:from-purple-400 dark:via-pink-400 dark:to-rose-400"
                 )}
               >
@@ -826,7 +907,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                 Focus Time
               </div>
               {state === "completed" && (
-                <div className="text-xl font-semibold mt-3 animate-pulse text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-rose-500 transition-all duration-500">
+                <div className="text-lg md:text-xl font-semibold mt-3 animate-pulse text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-rose-500 dark:from-red-400 dark:to-rose-400 transition-all duration-500">
                   Time&apos;s up! 🎉
                 </div>
               )}
@@ -846,8 +927,8 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
                 className={cn(
                   "h-full rounded-full transition-all duration-500 ease-out",
                   state === "completed"
-                    ? "bg-gradient-to-r from-red-500 via-rose-500 to-red-600"
-                    : "bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500"
+                    ? "bg-gradient-to-r from-red-500 via-rose-500 to-red-600 dark:from-red-400 dark:via-rose-400 dark:to-red-500"
+                    : "bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 dark:from-purple-400 dark:via-pink-400 dark:to-rose-400"
                 )}
                 style={{ width: `${progress}%` }}
               />
@@ -858,23 +939,23 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
           <div className="text-center max-w-md mb-8 px-4">
             <div className="relative">
               <div className="absolute -inset-1 bg-gradient-to-r from-purple-500/20 to-pink-500/20 blur-lg rounded-2xl" />
-              <p className="relative text-lg text-gray-800 dark:text-gray-200 italic transition-opacity duration-500 bg-gradient-to-r from-white/80 to-purple-50/80 dark:from-gray-900/80 dark:to-purple-900/20 p-5 rounded-2xl border border-purple-200/30 dark:border-purple-800/30 backdrop-blur-sm">
+              <p className="relative text-base md:text-lg text-gray-800 dark:text-gray-200 italic transition-opacity duration-500 bg-gradient-to-r from-white/80 to-purple-50/80 dark:from-gray-900/80 dark:to-purple-900/20 p-4 md:p-5 rounded-2xl border border-purple-200/30 dark:border-purple-800/30 backdrop-blur-sm">
                 &quot;{currentMessage}&quot;
               </p>
             </div>
           </div>
 
           {/* Controls */}
-          <div className="flex flex-wrap gap-4 justify-center">
+          <div className="flex flex-wrap gap-3 md:gap-4 justify-center">
             {state === "running" && (
               <Button
                 onClick={pauseTimer}
-                className="bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 hover:from-purple-700 hover:via-pink-700 hover:to-rose-700 text-white px-8 py-4 rounded-full text-lg font-semibold shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 group relative overflow-hidden"
+                className="bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 hover:from-purple-700 hover:via-pink-700 hover:to-rose-700 text-white px-6 md:px-8 py-3 md:py-4 rounded-full text-base md:text-lg font-semibold shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300 rounded-full" />
-                <div className="relative z-10 flex items-center gap-3">
-                  <div className="p-1.5 rounded-full bg-white/20 backdrop-blur-sm">
-                    <Pause className="h-5 w-5" />
+                <div className="relative z-10 flex items-center gap-2 md:gap-3">
+                  <div className="p-1 md:p-1.5 rounded-full bg-white/20 backdrop-blur-sm">
+                    <Pause className="h-4 w-4 md:h-5 md:w-5" />
                   </div>
                   <span>Pause</span>
                 </div>
@@ -884,12 +965,12 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
             {state === "paused" && (
               <Button
                 onClick={resumeTimer}
-                className="bg-gradient-to-r from-emerald-500 via-green-500 to-teal-600 hover:from-emerald-600 hover:via-green-600 hover:to-teal-700 text-white px-8 py-4 rounded-full text-lg font-semibold shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 group relative overflow-hidden"
+                className="bg-gradient-to-r from-emerald-500 via-green-500 to-teal-600 hover:from-emerald-600 hover:via-green-600 hover:to-teal-700 text-white px-6 md:px-8 py-3 md:py-4 rounded-full text-base md:text-lg font-semibold shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300 rounded-full" />
-                <div className="relative z-10 flex items-center gap-3">
-                  <div className="p-1.5 rounded-full bg-white/20 backdrop-blur-sm">
-                    <Play className="h-5 w-5" />
+                <div className="relative z-10 flex items-center gap-2 md:gap-3">
+                  <div className="p-1 md:p-1.5 rounded-full bg-white/20 backdrop-blur-sm">
+                    <Play className="h-4 w-4 md:h-5 md:w-5" />
                   </div>
                   <span>Resume</span>
                 </div>
@@ -900,11 +981,11 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
               <Button
                 onClick={resetTimer}
                 variant="outline"
-                className="border-gray-300/50 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 hover:bg-gray-50/80 dark:hover:bg-gray-800/80 px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 hover:scale-105 active:scale-95 group backdrop-blur-sm"
+                className="border-gray-300/50 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 hover:bg-gray-50/80 dark:hover:bg-gray-800/80 px-6 md:px-8 py-3 md:py-4 rounded-full text-base md:text-lg font-semibold transition-all duration-300 hover:scale-105 active:scale-95 group backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
               >
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 rounded-full bg-gray-100/50 dark:bg-gray-800/50">
-                    <RotateCcw className="h-5 w-5" />
+                <div className="flex items-center gap-2 md:gap-3">
+                  <div className="p-1 md:p-1.5 rounded-full bg-gray-100/50 dark:bg-gray-800/50">
+                    <RotateCcw className="h-4 w-4 md:h-5 md:w-5" />
                   </div>
                   <span>Reset</span>
                 </div>
@@ -914,12 +995,12 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
             {state === "completed" && (
               <Button
                 onClick={resetTimer}
-                className="bg-gradient-to-r from-emerald-500 via-green-500 to-teal-600 hover:from-emerald-600 hover:via-green-600 hover:to-teal-700 text-white px-8 py-4 rounded-full text-lg font-semibold shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 group relative overflow-hidden"
+                className="bg-gradient-to-r from-emerald-500 via-green-500 to-teal-600 hover:from-emerald-600 hover:via-green-600 hover:to-teal-700 text-white px-6 md:px-8 py-3 md:py-4 rounded-full text-base md:text-lg font-semibold shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300 rounded-full" />
-                <div className="relative z-10 flex items-center gap-3">
-                  <div className="p-1.5 rounded-full bg-white/20 backdrop-blur-sm">
-                    <RotateCcw className="h-5 w-5" />
+                <div className="relative z-10 flex items-center gap-2 md:gap-3">
+                  <div className="p-1 md:p-1.5 rounded-full bg-white/20 backdrop-blur-sm">
+                    <RotateCcw className="h-4 w-4 md:h-5 md:w-5" />
                   </div>
                   <span>Start New Session</span>
                 </div>
@@ -931,7 +1012,7 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
               variant="ghost"
               size="icon"
               className={cn(
-                "rounded-full w-14 h-14 transition-all duration-300 hover:scale-110 active:scale-95 group relative overflow-hidden backdrop-blur-sm",
+                "rounded-full w-12 h-12 md:w-14 md:h-14 transition-all duration-300 hover:scale-110 active:scale-95 group relative overflow-hidden backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
                 soundEnabled
                   ? "bg-gradient-to-r from-blue-500 via-cyan-500 to-sky-500 text-white shadow-lg"
                   : "bg-gray-100/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-400 border border-gray-300/50 dark:border-gray-600/50"
@@ -940,9 +1021,9 @@ export const FocusTimer = ({ onTimerStart, onTimerReset }: FocusTimerProps) => {
               <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300 rounded-full" />
               <div className="relative z-10">
                 {soundEnabled ? (
-                  <Volume2 className="h-7 w-7" />
+                  <Volume2 className="h-5 w-5 md:h-7 md:w-7" />
                 ) : (
-                  <VolumeX className="h-7 w-7" />
+                  <VolumeX className="h-5 w-5 md:h-7 md:w-7" />
                 )}
               </div>
             </Button>
