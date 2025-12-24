@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* app/globals.css */
+:root {
+  --timer-bg-start: #f3f4f6;
+  --timer-bg-end: #e5e7eb;
+  --timer-progress-start: #8b5cf6;
+  --timer-progress-mid: #ec4899;
+  --timer-progress-end: #e11d48;
+}
+
+.dark {
+  --timer-bg-start: #1f2937;
+  --timer-bg-end: #374151;
+  --timer-progress-start: #a78bfa;
+  --timer-progress-mid: #f472b6;
+  --timer-progress-end: #f87171;
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif;
 }
